@@ -102,8 +102,18 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
+    uint32_t size = ROUNDUP(n, PGSIZE);
 
-	return NULL;
+    if (nextfree + size < nextfree){
+        // nextfree overflow, should panic
+        panic("boot_alloc run out of memory\n");
+    }
+    else {
+        result = nextfree;
+        nextfree += size;
+    }
+     
+	return result;
 }
 
 // Set up a two-level page table:
@@ -125,7 +135,6 @@ mem_init(void)
 	i386_detect_memory();
 
 	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -148,7 +157,9 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
+    pages = (struct PageInfo*)boot_alloc(npages * sizeof(struct PageInfo));
 
+    memset(pages, 0, npages * sizeof(struct PageInfo));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -172,7 +183,7 @@ mem_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
-
+    
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
@@ -252,11 +263,25 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	size_t i;
-	for (i = 0; i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
-	}
+
+    page_free_list = NULL;
+
+    for (i = 1; i < npages_basemem; i++){
+       pages[i].pp_ref = 0;
+       pages[i].pp_link = page_free_list;
+       page_free_list = pages + i;
+    }
+
+    char *nextfree = (char*)boot_alloc(0);
+    for (i = EXTPHYSMEM / PGSIZE; i < npages; i++){
+        if ((physaddr_t)(i * PGSIZE) < PADDR(nextfree))
+            continue;
+        
+        pages[i].pp_ref = 0;
+        pages[i].pp_link = page_free_list;
+        page_free_list = pages + i;
+    }
+    
 }
 
 //
@@ -275,8 +300,21 @@ struct PageInfo *
 page_alloc(int alloc_flags)
 {
 	// Fill this function in
-	return 0;
+    if (page_free_list == NULL){
+        return page_free_list;
+    }
+    if (alloc_flags & ALLOC_ZERO){
+        memset(page2kva(page_free_list), '\0', PGSIZE);
+    }
+
+
+    struct PageInfo *page = page_free_list;
+    page_free_list = page_free_list->pp_link;
+
+    page->pp_link = NULL;
+    return page;
 }
+
 
 //
 // Return a page to the free list.
@@ -288,6 +326,12 @@ page_free(struct PageInfo *pp)
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
+    if (pp->pp_ref != 0){
+        panic("page_free ref count is not 0\n");
+    }
+    pp->pp_link = page_free_list;
+    page_free_list = pp;
+
 }
 
 //
@@ -327,7 +371,24 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+    pde_t *pde = pgdir + PDX(va);
+    pte_t *pte;
+
+    if (*pde & PTE_P == false) {
+        if (create == false)
+            return NULL;
+        // alloc a new page table page
+        struct PageInfo *page = page_alloc(ALLOC_ZERO);
+        
+        if (page == NULL) return NULL;
+        page->pp_ref++;
+
+        *pde = page2pa(page) | PTE_P | PTE_A | PTE_W;
+        
+    } 
+    pte = (pte_t *)PADDR(pde) + PTX(va); 
+    
+    return pte;
 }
 
 //
@@ -345,6 +406,15 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+    for (int i = 0; i < size / PGSIZE; i++){
+        pte_t *pte = pgdir_walk(pgdir, va, true);
+
+        *pte = pa | perm | PTE_P; 
+
+        // update va and pa
+        va += PGSIZE;
+        pa += PGSIZE;
+    }
 }
 
 //
