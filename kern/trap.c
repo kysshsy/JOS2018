@@ -58,6 +58,7 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+extern void *vectors[];
 
 void
 trap_init(void)
@@ -65,7 +66,10 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
-
+    for (int i = 0; i < 20; i++){
+        SETGATE(idt[i], 0, GD_KT, vectors[i], DPL_KERN);
+    }
+    SETGATE(idt[T_SYSCALL], 0, GD_KT, vectors[T_SYSCALL], DPL_USER);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
