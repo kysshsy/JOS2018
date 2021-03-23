@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/error.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -65,6 +66,7 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+extern void *vectors[];
 
 void
 trap_init(void)
@@ -72,7 +74,12 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
-
+    for (int i = 0; i < 20; i++){
+        SETGATE(idt[i], 0, GD_KT, vectors[i], DPL_KERN);
+    }
+    // different from xv6, JOS abuse breakpoint exception
+    SETGATE(idt[T_BRKPT], 0, GD_KT, vectors[T_BRKPT], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 1, GD_KT, vectors[T_SYSCALL], DPL_USER);
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -176,6 +183,13 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
+    switch (tf->tf_trapno){
+        case T_PGFLT: page_fault_handler(tf); return;
+        case T_BRKPT: monitor(tf);            return;
+        case T_SYSCALL: 
+        tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
+                                tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi, tf->tf_regs.reg_esi);return;  
+    } 
 
 	// Handle spurious interrupts
 	// The hardware sometimes raises these because of noise on the
@@ -269,9 +283,11 @@ page_fault_handler(struct Trapframe *tf)
 	fault_va = rcr2();
 
 	// Handle kernel-mode page faults.
-
 	// LAB 3: Your code here.
 
+    if ((tf->tf_cs & 3) == DPL_KERN){
+        panic("page fault handler: %e\n", E_UNSPECIFIED);
+    }
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
