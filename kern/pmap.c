@@ -572,11 +572,25 @@ static uintptr_t user_mem_check_addr;
 // Returns 0 if the user program can access this range of addresses,
 // and -E_FAULT otherwise.
 //
+
 int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+    void *vend = ROUNDUP((void*)va + len, PGSIZE);
+    void *vbegin = ROUNDDOWN((void*)va, PGSIZE);
 
+    if (vend < va){
+       vend = (void*)(~0); 
+    }
+    for (; vbegin < vend; vbegin += PGSIZE){
+        pte_t *pte = pgdir_walk(env->env_pgdir, vbegin, false);
+
+        if (vbegin >= (void*)ULIM || pte == NULL || ((*pte & (perm | PTE_P)) != (perm | PTE_P))){
+            user_mem_check_addr = (uintptr_t)((vbegin < va) ? va : vbegin);
+            return -E_FAULT;
+        }
+    }
 	return 0;
 }
 
