@@ -79,7 +79,11 @@ trap_init(void)
     }
     // different from xv6, JOS abuse breakpoint exception
     SETGATE(idt[T_BRKPT], 0, GD_KT, vectors[T_BRKPT], DPL_USER);
-    SETGATE(idt[T_SYSCALL], 1, GD_KT, vectors[T_SYSCALL], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 0, GD_KT, vectors[T_SYSCALL], DPL_USER);
+
+    for (int i = 0; i <= 15; i++){
+        SETGATE(idt[IRQ_OFFSET + i], 0, GD_KT, vectors[IRQ_OFFSET + i], DPL_KERN);
+    }
 	// Per-CPU setup 
 	trap_init_percpu();
 }
@@ -211,7 +215,10 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
-
+    if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER){
+		lapic_eoi();
+		sched_yield();
+	}
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
 	if (tf->tf_cs == GD_KT)

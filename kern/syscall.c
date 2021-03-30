@@ -89,6 +89,7 @@ sys_exofork(void)
     e = env_alloc(&env, curenv->env_id);
     //copy register 
     env->env_tf = curenv->env_tf;
+    env->env_status = ENV_NOT_RUNNABLE;
     env->env_tf.tf_regs.reg_eax = 0;
 
     return (e < 0) ? e : env->env_id;
@@ -324,7 +325,44 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	struct Env *env;
+	if (envid2env(envid, &env, 0) < 0){
+		return -E_BAD_ENV;
+	}
+	//cprintf("check 1\n");
+	if (env->env_ipc_recving == 0 || env->env_status != ENV_NOT_RUNNABLE)
+		return -E_IPC_NOT_RECV;
+	//cprintf("check 2\n");
+	if ((unsigned)srcva <= UTOP && (unsigned)srcva % PGSIZE != 0) // check va
+		return -E_INVAL;
+	//cprintf("check 3\n");
+	env->env_ipc_recving = 0;
+	env->env_ipc_from = curenv->env_id;
+	env->env_ipc_value = value;
+	env->env_ipc_perm = 0;
+	if ((unsigned) env->env_ipc_dstva < UTOP && (unsigned) srcva < UTOP){
+		if (!((perm & PTE_U) && (perm & PTE_P) && (perm & ~(PTE_U | PTE_P | PTE_AVAIL | PTE_W)) == 0))
+			return -E_INVAL;
+		//cprintf("check 4\n");
+		void *dstva = env->env_ipc_dstva;
+		pte_t *pte;
+		struct PageInfo *page;
+		if ((page = page_lookup(curenv->env_pgdir, srcva, &pte)) == NULL)
+			return -E_INVAL;
+		//cprintf("check 5\n");
+		if ((perm & PTE_W) && (*pte & PTE_W) == 0)
+			return -E_INVAL;
+		//cprintf("check 6\n");
+		if (page_insert(env->env_pgdir, page, dstva, perm) < 0)
+			return -E_NO_MEM;
+		env->env_ipc_perm = perm;
+		//cprintf("check 7\n");
+		
+	}
+	env->env_status = ENV_RUNNABLE;
+	
+	return 0;
+	//panic("sys_ipc_try_send not implemented");
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -334,7 +372,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 // If 'dstva' is < UTOP, then you are willing to receive a page of data.
 // 'dstva' is the virtual address at which the sent page should be mapped.
 //
-// This function only returns on error, but the system call will eventually
+// This function only returns on error, but the system call will eventually // tip
 // return 0 on success.
 // Return < 0 on error.  Errors are:
 //	-E_INVAL if dstva < UTOP but dstva is not page-aligned.
@@ -342,9 +380,27 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+	//panic("sys_ipc_recv not implemented");
+	curenv->env_status = ENV_NOT_RUNNABLE;
+	curenv->env_ipc_recving = true;
+
+	if ((unsigned)dstva < UTOP){
+		if ((unsigned) dstva % PGSIZE != 0)
+			return -E_INVAL;
+		curenv->env_ipc_dstva = dstva;
+	}
+
+	// block until a value is ready
+	curenv->env_tf.tf_regs.reg_eax = 0;  // return from syscall and return 0
+	while (curenv->env_status == ENV_NOT_RUNNABLE){
+		sched_yield();
+	}
+	if (curenv->env_ipc_recving == true)
+		panic("pic_recv still recving\n"); // some problem
 	return 0;
 }
+
+
 
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
@@ -364,8 +420,7 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
         case SYS_getenvid:
             return sys_getenvid();
         case SYS_env_destroy:
-            sys_env_destroy(a1);
-            panic("syscall env_destroy: shouldn't reach there\n");
+            return sys_env_destroy(a1);
         case SYS_yield:
             sys_yield();
             panic("syscall yield: shouldn't reach there\n");
@@ -381,6 +436,10 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_page_unmap((envid_t)a1, (void *)a2);
         case SYS_env_set_pgfault_upcall:
             return sys_env_set_pgfault_upcall((envid_t)a1, (void *)a2);
+        case SYS_ipc_try_send:
+            return sys_ipc_try_send((envid_t)a1, (uint32_t)a2, (void*)a3, (unsigned int)a4);
+        case SYS_ipc_recv:
+            return sys_ipc_recv((void*)a1);
         default:
             return -E_INVAL;
 	}
