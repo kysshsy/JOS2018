@@ -1,6 +1,10 @@
 #ifndef JOS_INC_TRAP_H
 #define JOS_INC_TRAP_H
 
+#define DPL_KERN 0x0
+#define DPL_USER 0x3
+
+
 // Trap numbers
 // These are processor defined:
 #define T_DIVIDE     0		// divide error
