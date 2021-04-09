@@ -4,7 +4,7 @@
 #define UTEMP2USTACK(addr)	((void*) (addr) + (USTACKTOP - PGSIZE) - UTEMP)
 #define UTEMP2			(UTEMP + PGSIZE)
 #define UTEMP3			(UTEMP2 + PGSIZE)
-
+#define FDTABLE         0xD0000000
 // Helper functions for spawn.
 static int init_stack(envid_t child, const char **argv, uintptr_t *init_esp);
 static int map_segment(envid_t child, uintptr_t va, size_t memsz,
@@ -302,6 +302,20 @@ static int
 copy_shared_pages(envid_t child)
 {
 	// LAB 5: Your code here.
+    int r;
+    void* addr; 
+    
+
+    for (addr = 0; addr < (void *)USTACKTOP; addr += PGSIZE){
+		if ((uvpd[PDX(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_U) && (uvpt[PGNUM(addr)] & PTE_SHARE)){
+            uint32_t pn = PGNUM(addr);
+            if ((r = sys_page_map(0, addr, child, addr, uvpt[pn] & PTE_SYSCALL)) < 0)
+                return r;
+            if ((r = sys_page_map(0, addr, 0, addr, uvpt[pn] & PTE_SYSCALL)) < 0)
+                return r;
+		}
+		
+	}
 	return 0;
 }
 
