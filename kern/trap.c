@@ -27,7 +27,7 @@ static struct Trapframe *last_tf;
 /* Interrupt descriptor table.  (Must be built at run time because
  * shifted function addresses can't be represented in relocation records.)
  */
-struct Gatedesc idt[256] = { { 0 } };
+struct Gatedesc idt[50] = { { 0 } };
 struct Pseudodesc idt_pd = {
 	sizeof(idt) - 1, (uint32_t) idt
 };
@@ -224,6 +224,7 @@ trap_dispatch(struct Trapframe *tf)
 
 
     if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER){
+        time_tick();
 		lapic_eoi();
 		sched_yield();
 	}
