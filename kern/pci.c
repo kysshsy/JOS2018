@@ -33,7 +33,7 @@ struct pci_driver pci_attach_class[] = {
 
 
 struct pci_driver pci_attach_vendor[] = {
-    { VENDOR_ID_82540EM, DEVICE_ID_82540EM, pci_func_enable},
+    { VENDOR_ID_82540EM, DEVICE_ID_82540EM, attach_82540EM},
 	{ 0, 0, 0 },
 };
 
