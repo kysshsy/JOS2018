@@ -2,6 +2,7 @@
 #include <kern/e1000.h>
 #include <kern/pmap.h>
 #include <inc/string.h>
+#include <inc/error.h>
 
 #define OFF_CTRL 0x00000 // device register
 
@@ -52,7 +53,9 @@ int transmit_packet(const void *base, size_t size)
     tx_dt[*TDT].length = size;
     // update descriptor
     tx_dt[*TDT].cmd.RS = 1;
+    tx_dt[*TDT].cmd.EOP = 1;
     tx_dt[*TDT].status.DD = 0;
+
 
     *TDT = (*TDT + 1) % DESC_SIZE;
     return 0;
@@ -77,6 +80,8 @@ int attach_82540EM(struct pci_func *f)
     for (int i = 0; i < DESC_SIZE; i++)
     {
         tx_dt[i].addr = PADDR(packet_buffer[i]);
+        tx_dt[i].cmd.value = 0;
+        tx_dt[i].status.DD = 1;
     }
     //  initial 82540EM register according to 14.5
 

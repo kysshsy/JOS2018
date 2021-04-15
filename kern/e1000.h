@@ -45,4 +45,5 @@ union TDesc{
 
 int attach_82540EM(struct pci_func *f);
 
+int transmit_packet(const void *base, size_t size);
 #endif  // SOL >= 6
