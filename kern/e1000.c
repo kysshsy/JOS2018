@@ -1,4 +1,5 @@
 // LAB 6: Your driver code here
+// https://pdos.csail.mit.edu/6.828/2018/readings/hardware/8254x_GBe_SDM.pdf
 #include <kern/e1000.h>
 #include <kern/pmap.h>
 #include <inc/string.h>
@@ -116,7 +117,7 @@ int attach_82540EM(struct pci_func *f)
     //This register controls the IPG (Inter Packet Gap) timer for the Ethernet controller.
     *(uint32_t *)((char *)e1000 + OFF_TIPG) = (IPGR2 | IPGR1 | IPGT);
 
-    assert(test_transmit() == 0); 
+    //assert(test_transmit() == 0); 
     return 0;
 }
 
