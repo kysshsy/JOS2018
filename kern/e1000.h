@@ -43,6 +43,40 @@ union TDesc{
     }legacy;
 };
 
+struct rx{
+    uint64_t addr;
+    uint16_t length;
+    uint16_t RSV1;
+
+    union {
+        struct {
+            uint8_t DD    : 1;
+            uint8_t EOP   : 1;
+            uint8_t IXSM  : 1;
+            uint8_t VP    : 1;
+            uint8_t RSV   : 1;
+            uint8_t TCPCS : 1;
+            uint8_t IPCS  : 1;
+            uint8_t PIF   : 1;
+        };
+        uint8_t value;
+    }status;
+
+    union {
+        struct {
+            uint8_t CE       : 1;
+            uint8_t RSV_SE   : 1;
+            uint8_t RSV_SEQ  : 1;
+            uint8_t RSV      : 1;
+            uint8_t RSV2     : 1;
+            uint8_t TCPE     : 1;
+            uint8_t IPE      : 1;
+            uint8_t RXE      : 1;
+        };
+        uint8_t value;
+    }error;
+    uint16_t RSV2;
+};
 int attach_82540EM(struct pci_func *f);
 
 int transmit_packet(const void *base, size_t size);
