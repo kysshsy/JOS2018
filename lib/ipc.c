@@ -66,13 +66,13 @@ ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
 	if (pg == NULL){
 		while ((r = sys_ipc_try_send(to_env, val, (void *)UTOP, perm)) != 0){
 			if (r < 0 && r != -E_IPC_NOT_RECV)
-				panic("ipc_send fail\n");
+				panic("ipc_send fail %d\n", r);
 		}
 	}
 	else{
 		while ((r = sys_ipc_try_send(to_env, val, pg, perm)) != 0){
 			if (r < 0 && r != -E_IPC_NOT_RECV){
-				panic("ipc_send fail\n");
+				panic("ipc_send fail %d\n", r);
 			}
 		}
 	}

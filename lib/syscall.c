@@ -128,3 +128,9 @@ sys_transmit(void* buf, size_t size)
 {
     return syscall(SYS_transmit, 1, (uint32_t)buf, size, 0, 0, 0);
 }
+
+int 
+sys_receive(void *buf, size_t size)
+{
+    return syscall(SYS_receive, 1, (uint32_t)buf, size, 0, 0, 0);
+}

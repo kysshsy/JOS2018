@@ -4,6 +4,7 @@
 #include <inc/error.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/ns.h>
 
 #include <kern/env.h>
 #include <kern/pmap.h>
@@ -446,6 +447,14 @@ sys_transmit(void* buf, size_t size){
     return transmit_packet(buf, size);
 }
 
+static int
+sys_receive(union Nsipc *buf, size_t size){
+    user_mem_assert(curenv, buf, size, PTE_U | PTE_P | PTE_W);
+    int r = receive_packet(buf->pkt.jp_data, size);
+    buf->pkt.jp_len = r;
+    return (r > 0)? 0 : r;
+}
+
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
 syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
@@ -490,6 +499,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_time_msec();
         case SYS_transmit:
             return sys_transmit((void*)a1, (size_t)a2);
+        case SYS_receive:
+            return sys_receive((union Nsipc*)a1, (size_t)a2);
         default:
             return -E_INVAL;
 	}

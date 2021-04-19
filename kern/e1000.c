@@ -97,7 +97,28 @@ int transmit_packet(const void *base, size_t size)
     *TDT = (*TDT + 1) % TXDESC_SIZE;
     return 0;
 }
+int receive_packet(void *base, size_t size) {
+    volatile uint32_t *RDT = (uint32_t *)((char *)e1000 + OFF_RDT);
 
+    // check descriptor 
+    uint32_t next = (*RDT + 1) % RXDESC_SIZE;
+
+    if (rx_dt[next].status.DD == 0){
+        return -E_TRY_AGAIN;
+    }
+    
+    rx_dt[next].status.value = 0;
+    
+    assert(size >= rx_dt[next].length);
+
+    memcpy(base, KADDR(rx_dt[next].addr), rx_dt[next].length);
+    
+    // update RDT
+    *RDT = next;
+
+    return rx_dt[next].length;
+
+}
 int attach_82540EM(struct pci_func *f)
 {
     pci_func_enable(f);
@@ -223,8 +244,6 @@ void set_address(char *address, uint32_t flag){
     
     *RAL = low;
     *RAH = high;
-    cprintf("%x \n", *RAL);
-    cprintf("%x \n", *RAH);
 }
 
 static int test_transmit()
