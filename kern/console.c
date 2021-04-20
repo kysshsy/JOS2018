@@ -165,7 +165,7 @@ cga_init(void)
 
 
 static void
-cga_putc(int c)
+cga_putc1(int c)
 {
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
@@ -213,6 +213,114 @@ cga_putc(int c)
 	outb(addr_6845 + 1, crt_pos);
 }
 
+
+static int
+isdigit(int c)
+{
+	return c >= '0' && c <= '9';
+}
+ 
+static int 
+atoi(const char* s)
+{
+	int res = 0;
+	for (int i = 0; isdigit(s[i]); ++i)
+		res = res * 10 + (s[i] - '0');
+	return res;
+}
+ 
+// Modify the VGA text-mode character attribute 'attr' 
+// based on the parameter contained in the buf.
+static void
+handle_ansi_esc_param(const char* buf, int len, int* attr)
+{
+	// white is light grey
+	static int ansi2cga[] = {0x0, 0x4, 0x2, 0xe, 0x1, 0x5, 0x3, 0x7};
+	int tmp_attr = *attr;
+	int n = atoi(buf);
+	if (n >= 30 && n <= 37) {
+		tmp_attr = (tmp_attr & ~(0x0f)) | ansi2cga[n - 30];
+	} else if (n >= 40 && n <= 47) {
+		tmp_attr = (tmp_attr & ~(0xf0)) | (ansi2cga[n - 40] << 4);
+	} else if (n == 0) {
+		tmp_attr = 0x07;
+	}
+	*attr = tmp_attr;
+}
+ 
+// The max length of one parameter.
+// Emmmmmm... no body will input 
+// a number parameter with length of 1023, probably.
+#define ESC_BUFSZ 1024
+
+
+static void 
+cga_putc(int c)
+{
+	static int state = 0;
+	static char esc_buf[ESC_BUFSZ];
+	static int esc_len = 0;
+	static int attr = 0; // default attribute.
+	static int esc_attr = 0;
+ 
+	switch(state) {
+	case 0: {
+		if ((char)c == '\x1b') {
+			state = 1;
+		} else {
+			cga_putc1((attr << 8) | (c & 0xff));
+		}
+		break;
+	}
+	case 1: {
+		if ((char)c == '[') {
+			esc_attr = attr;
+			state = 2;
+		} else if ((char)c != '\x1b') {
+			state = 0;
+		}
+		break;
+	}
+	case 2: {
+		if (isdigit(c)) {
+			esc_buf[esc_len++] = (char)c;
+			state = 3;
+		} else {
+			// discard modification
+			esc_len = 0;
+ 
+			state = 0;
+		}
+		break;
+	}
+	case 3: {
+		if (isdigit(c)) {
+			esc_buf[esc_len++] = (char)c;
+		} else if ((char)c == ';') {
+			// record current modification
+			esc_buf[esc_len++] = 0;
+			handle_ansi_esc_param(esc_buf, esc_len, &esc_attr);
+			esc_len = 0;
+ 
+			state = 2;
+		} else if ((char)c == 'm') {
+			// update the attribute
+			esc_buf[esc_len++] = 0;
+			handle_ansi_esc_param(esc_buf, esc_len, &esc_attr);
+			esc_len = 0;
+			attr = esc_attr;
+ 
+			state = 0;
+		} else {
+			// discard modification
+			esc_len = 0;
+ 
+			state = 0;
+		}
+		break;
+	}
+	}
+}
 
 /***** Keyboard input code *****/
 
